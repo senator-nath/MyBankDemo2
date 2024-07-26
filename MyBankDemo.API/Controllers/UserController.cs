@@ -46,5 +46,17 @@ namespace MyBankDemo.API.Controllers
         {
             return await _userService.Login(entity);
         }
+        [HttpPost("change-password")]
+        public async Task<IActionResult> ChangePassword(ChangePassWordRequestDto entity)
+        {
+            var response = await _userService.ChangePassword(entity);
+            return Ok(response);
+        }
+        [HttpPost("reset-password")]
+        public async Task<IActionResult> ResetPassword(ResetPasswordRequestDto entity)
+        {
+            var response = await _userService.ResetPassword(entity);
+            return Ok(response);
+        }
     }
 }

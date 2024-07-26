@@ -29,6 +29,7 @@ using MyBankApp.Persistence;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using MyBankApp.Application.validator;
+using MyBankApp.Persistence.Helper;
 namespace MyBankDemo.API
 {
     public class Startup
@@ -58,7 +59,12 @@ namespace MyBankDemo.API
             services.AddScoped<IUserService, UserService>();
             services.AddScoped<UserRequestValidator>();
             services.AddScoped<AppSettings>();
+            services.AddScoped<RandomNumberGenerator>();
+            services.AddScoped<AgeCalculator>();
+            services.AddScoped<TokenGenerator>();
 
+
+            services.AddHttpClient();
             services.AddControllers();
 
             services.AddLogging(logging =>

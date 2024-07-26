@@ -15,5 +15,7 @@ namespace MyBankApp.Application.Contracts.IServices
 
         Task<UserResponseDetails> Register(UserRequestDto entity);
         Task<UserResponseDetails> Login(LoginRequestDto entity);
+        Task<UserResponseDetails> ChangePassword(ChangePassWordRequestDto entity);
+        Task<UserResponseDetails> ResetPassword(ResetPasswordRequestDto entity);
     }
 }

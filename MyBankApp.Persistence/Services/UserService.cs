@@ -9,11 +9,14 @@ using MyBankApp.Application.validator;
 using MyBankApp.Domain.Dto.RequestDto;
 using MyBankApp.Domain.Dto.ResponseDto;
 using MyBankApp.Domain.Entities;
+using MyBankApp.Persistence.Helper;
 using MyBankApp.Persistence.Repository;
 using System;
 using System.Collections.Generic;
 using System.IdentityModel.Tokens.Jwt;
 using System.Linq;
+using System.Net.Http;
+using System.Net.Http.Json;
 using System.Security.Claims;
 using System.Text;
 using System.Threading.Tasks;
@@ -28,52 +31,73 @@ namespace MyBankApp.Persistence.Services
         private readonly AppSettings _appSettings;
         private readonly IConfiguration _configuration;
         private readonly UserRequestValidator _validator;
+        private readonly IHttpClientFactory _httpClientFactory;
+        private readonly RandomNumberGenerator _randomNumberGenerator;
+        private readonly AgeCalculator _ageCalculator;
+        private readonly TokenGenerator _tokenGenerator;
 
-        public UserService(IUnitOfWork unitOfWork, ILogger<UserService> logger, IConfiguration configuration, UserRequestValidator validator, IOptions<AppSettings> appSettings)
+        public UserService(IUnitOfWork unitOfWork, ILogger<UserService> logger, IConfiguration configuration, UserRequestValidator validator, IOptions<AppSettings> appSettings, IHttpClientFactory httpClientFactory, RandomNumberGenerator randomNumberGenerator, AgeCalculator ageCalculator, TokenGenerator tokenGenerator)
         {
             _unitOfWork = unitOfWork;
             _logger = logger;
             _configuration = configuration;
             _validator = validator;
             _appSettings = appSettings.Value;
+            _httpClientFactory = httpClientFactory;
+            _ageCalculator = ageCalculator;
+            _tokenGenerator = tokenGenerator;
+            _randomNumberGenerator = randomNumberGenerator;
         }
         public async Task<UserResponseDetails> Login(LoginRequestDto entity)
         {
             var response = new UserResponseDetails();
-
             var user = await _unitOfWork.user.GetByColumnAsync(x => x.Email == entity.Email);
-            var Password = Helper.Helper.HashPassword(entity.Password);
-            if (user != null)
+
+            if (user == null)
             {
                 response.Message = "User does not exist";
-            }
-            if (!user.Email.Equals(entity.Email))
-            {
-                response.Message = "Email or password is incorrect";
-            }
-            if (user.HashPassword != Password)
-            {
-                response.Message = "Email or password is incorrect";
                 return response;
             }
-            var tokenHandler = new JwtSecurityTokenHandler();
-            var key = Encoding.ASCII.GetBytes(_appSettings.secret);
-            var tokenDescriptor = new SecurityTokenDescriptor
+
+            if (user.Status == "isInactive")
             {
-                Subject = new ClaimsIdentity(new Claim[] {
-                    new Claim(ClaimTypes.Name, user.Id.ToString()),
+                response.Message = "Account is locked. Please reset password to access your account.";
+                return response;
+            }
 
-                }),
-                Expires = DateTime.UtcNow.AddDays(7),
-                SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha256Signature)
-            };
+            var password = Helper.Helper.HashPassword(entity.Password);
+            if (!password.Equals(user.HashPassword))
+            {
+                user.LoginAttempts++;
+                await _unitOfWork.user.UpdateAsync(user);
 
-            var token = tokenHandler.CreateToken(tokenDescriptor);
-            response.Token = tokenHandler.WriteToken(token);
+                if (user.LoginAttempts >= 3)
+                {
+                    user.Status = "isInactive";
+                    await _unitOfWork.user.UpdateAsync(user);
+                    response.Message = "Account locked due to multiple failed login attempts. Please reset password to access your account.";
+                }
+                else
+                {
+                    response.Message = "Email or password is incorrect";
+                }
+                return response;
+            }
+
+            // Login successful, reset login attempts and unlock account if necessary
+            user.LoginAttempts = 0;
+            user.Status = "isActive";
+            await _unitOfWork.user.UpdateAsync(user);
+
+            var token = _tokenGenerator.GenerateToken(user.UserName);
+
+            response.Token = token;
             response.Message = "Login successful";
+            response.IsSuccess = true;
 
             return response;
         }
+
         public async Task<UserResponseDetails> Register(UserRequestDto entity)
         {
             try
@@ -108,7 +132,7 @@ namespace MyBankApp.Persistence.Services
                     Gender = entity.Gender,
                     StateId = entity.StateId,
                     LGAId = entity.LGAId,
-                    Age = CalculateAgeFromDateOfBirth(entity.Dob),
+                    Age = _ageCalculator.CalculateAgeFromDateOfBirth(entity.Dob),
                     UserName = entity.UserName,
                     Title = entity.Title,
                     accountType = entity.AccountType,
@@ -117,56 +141,57 @@ namespace MyBankApp.Persistence.Services
                     HasBvn = entity.HasBvn,
                     Bvn = entity.Bvn,
                     HashPassword = Helper.Helper.HashPassword(entity.Password),
-                    AccountNo = Generate11DigitRandomNumber(),
+                    AccountNo = _randomNumberGenerator.Generate11DigitRandomNumber(),
+                    Status = "isActive"
                 };
 
                 await _unitOfWork.user.CreateAsync(user);
                 await _unitOfWork.CompleteAsync();
-                var claim = new List<Claim>
+
+                var notificationRequest = new
                 {
-                    new Claim(JwtRegisteredClaimNames.Sub, entity.UserName),
-                    new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
+                    To = entity.Email,
+                    Subject = "Account Registration",
+                    Body = $"Account Number{user.AccountNo}, Password : {entity.Password}"
                 };
+                var httpClient = new HttpClient();
+                var sendEmail = await httpClient.PostAsJsonAsync("https://localhost:7168/api/EmailService", notificationRequest);
 
-                var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_appSettings.secret));
-                var cred = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
-                var tokenHandler = new JwtSecurityTokenHandler();
-                var exp = DateTime.UtcNow.AddDays(7);
-                var tok = new JwtSecurityToken
-                    (
-                        //issuer: "LocalHost",
-                        expires: exp,
-                        signingCredentials: cred
-
-
-                    );
-                var tk = new JwtSecurityTokenHandler().WriteToken(tok);
-
-                var response = new UserResponseDto()
+                if (user.Status == "isActive")
                 {
-                    LastLogin = "Now",
-                    Token = tk,
-                    DailyLimitBalance = "",
-                    AccountNumber = user.AccountNo,
-                    UserName = user.UserName,
-                    AccountName = user.FirstName + " " + user.MiddleName + " " + user.LastName,
-                    Title = user.Title,
-                    GenderId = user.GenderId,
-                    AccountType = user.accountType,
-                    Bvn = user.Bvn,
-                    NIN = user.NIN,
-                    Status = "",
-                };
+                    var token = _tokenGenerator.GenerateToken(entity.UserName);
+                    var response = new UserResponseDto()
+                    {
+                        LastLogin = "Now",
+                        Token = token,
+                        DailyLimitBalance = "",
+                        AccountNumber = user.AccountNo,
+                        UserName = user.UserName,
+                        AccountName = user.FirstName + " " + user.MiddleName + " " + user.LastName,
+                        Title = user.Title,
+                        GenderId = user.GenderId,
+                        AccountType = user.accountType,
+                        Bvn = user.Bvn,
+                        NIN = user.NIN,
+                        Status = user.Status,
+                        Email = user.Email,
+                    };
 
-                return new UserResponseDetails()
+                    return new UserResponseDetails()
+                    {
+
+                        IsSuccess = true,
+                        ResponseDetails = response,
+                    };
+                }
+                else
                 {
-                    Message = "",
-                    IsSuccess = true,
-                    ResponseDetails = response,
-
-
-                };
-
+                    return new UserResponseDetails()
+                    {
+                        Message = "User is not active",
+                        IsSuccess = false
+                    };
+                }
             }
             catch (ValidationException ex)
             {
@@ -188,44 +213,88 @@ namespace MyBankApp.Persistence.Services
             }
         }
 
-        //private string GenerateToken(UserResponseDetails user)
-        //{
-        //    var tokenHandler = new JwtSecurityTokenHandler();
-        //    var key = Encoding.ASCII.GetBytes(_appSettings.secret);
-        //    var tokenDescriptor = new SecurityTokenDescriptor
-        //    {
-        //        Subject = new ClaimsIdentity(new Claim[]
-        //        {
-        //new Claim(ClaimTypes.Name, user.UserName),
-        //new Claim(ClaimTypes.Email, user.Email),
 
-        //        }),
-        //        Expires = DateTime.UtcNow.AddMinutes(30),
-        //        SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha256Signature)
-        //    };
-        //    var token = tokenHandler.CreateToken(tokenDescriptor);
-        //    //    return tokenHandler.WriteToken(token);
-        //}
-        private static string Generate11DigitRandomNumber()
+        public async Task<UserResponseDetails> ChangePassword(ChangePassWordRequestDto entity)
         {
-            Random random = new Random();
-            string result = string.Empty;
+            try
+            {
+                var user = await _unitOfWork.user.GetByColumnAsync(x => x.Email == entity.Email);
 
-            result += random.Next(100000, 1000000).ToString("D6");
-            result += random.Next(10000, 100000).ToString("D5");
+                if (user == null)
+                {
+                    return new UserResponseDetails()
+                    {
+                        Message = "User not found",
+                        IsSuccess = false
+                    };
+                }
 
-            return result;
+                var password = Helper.Helper.HashPassword(entity.OldPassword);
+                if (!password.Equals(user.HashPassword))
+                {
+                    return new UserResponseDetails()
+                    {
+                        Message = "Old password is incorrect",
+                        IsSuccess = false
+                    };
+                }
+
+                if (entity.NewPassword != entity.ConfirmPassword)
+                {
+                    return new UserResponseDetails()
+                    {
+                        Message = "New password and confirm password do not match",
+                        IsSuccess = false
+                    };
+                }
+
+                user.HashPassword = Helper.Helper.HashPassword(entity.NewPassword);
+                await _unitOfWork.user.UpdateAsync(user);
+
+                return new UserResponseDetails()
+                {
+                    Message = "Password changed successfully",
+                    IsSuccess = true
+                };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error changing password");
+                return new UserResponseDetails()
+                {
+                    Message = "Server error",
+                    IsSuccess = false
+                };
+            }
         }
-        private string CalculateAgeFromDateOfBirth(DateTime Dob)
+
+
+        public async Task<UserResponseDetails> ResetPassword(ResetPasswordRequestDto entity)
         {
-            var today = DateTime.Today;
-            var age = today.Year - Dob.Year;
+            var response = new UserResponseDetails();
+            var user = await _unitOfWork.user.GetByColumnAsync(x => x.Email == entity.Email);
 
-            if (Dob.Date > today.AddYears(-age)) age--;
+            if (user == null)
+            {
+                response.Message = "User does not exist";
+                return response;
+            }
 
+            if (user.Status != "isInactive")
+            {
+                response.Message = "Account is already active. No need to reset password.";
+                return response;
+            }
 
-            var Age = age.ToString();
-            return Age;
+            user.HashPassword = Helper.Helper.HashPassword(entity.NewPassword);
+            user.Status = "isActive";
+            user.LoginAttempts = 0;
+            await _unitOfWork.user.UpdateAsync(user);
+
+            response.Message = "Password reset successful. You can now login.";
+            response.IsSuccess = true;
+
+            return response;
         }
     }
 }
