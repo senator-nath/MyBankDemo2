@@ -58,5 +58,12 @@ namespace MyBankDemo.API.Controllers
             var response = await _userService.ResetPassword(entity);
             return Ok(response);
         }
+        [HttpPost]
+        [Route(" EmailConfirmation")]
+        public async Task<string> EmailConfirmation(EmailConfirmationRequestDto request)
+        {
+            var result = await _userService.EmailConfirmation(request);
+            return result;
+        }
     }
 }

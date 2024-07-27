@@ -6,10 +6,11 @@ using System.Threading.Tasks;
 
 namespace MyBankApp.Domain.Dto.RequestDto
 {
-    public class ResetPasswordRequestDto
+    public class SendEmailConfirmation
     {
-        public string Email { get; set; }
-        public string NewPassword { get; set; }
+        public string UserEmail { get; set; }
+        public string Subject { get; set; }
+        public string FirstName { get; set; }
         public string Token { get; set; }
     }
 }

@@ -23,10 +23,10 @@ namespace MyBankApp.Persistence.Repository
         public IAccountLimitRepository accountLimit { get; }
 
         public IGenderRepository gender { get; }
+        public IVerificationTokenRepository VerificationTokens { get; }
 
 
-
-        public UnitOfWork(MyBankAppDbContext dbContext)
+        public UnitOfWork(MyBankAppDbContext dbContext, IVerificationTokenRepository verificationTokens)
         {
             _dbContext = dbContext;
 
@@ -36,7 +36,7 @@ namespace MyBankApp.Persistence.Repository
             state = new StateRepository(_dbContext);
             lgaRepository = new LGARepository(_dbContext);
             accountLimit = new AccountLimitRepository(_dbContext);
-
+            VerificationTokens = verificationTokens;
 
         }
         public async Task<int> CompleteAsync()

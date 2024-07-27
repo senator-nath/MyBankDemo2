@@ -1,4 +1,5 @@
 ﻿using FluentValidation;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -9,6 +10,7 @@ using MyBankApp.Application.validator;
 using MyBankApp.Domain.Dto.RequestDto;
 using MyBankApp.Domain.Dto.ResponseDto;
 using MyBankApp.Domain.Entities;
+using MyBankApp.Domain.Enum;
 using MyBankApp.Persistence.Helper;
 using MyBankApp.Persistence.Repository;
 using System;
@@ -35,6 +37,7 @@ namespace MyBankApp.Persistence.Services
         private readonly RandomNumberGenerator _randomNumberGenerator;
         private readonly AgeCalculator _ageCalculator;
         private readonly TokenGenerator _tokenGenerator;
+        private readonly UserManager<User> _userManager;
 
         public UserService(IUnitOfWork unitOfWork, ILogger<UserService> logger, IConfiguration configuration, UserRequestValidator validator, IOptions<AppSettings> appSettings, IHttpClientFactory httpClientFactory, RandomNumberGenerator randomNumberGenerator, AgeCalculator ageCalculator, TokenGenerator tokenGenerator)
         {
@@ -53,12 +56,11 @@ namespace MyBankApp.Persistence.Services
             var response = new UserResponseDetails();
             var user = await _unitOfWork.user.GetByColumnAsync(x => x.Email == entity.Email);
 
-            if (user == null)
+            if (user == null || !user.EmailConfirmed)
             {
-                response.Message = "User does not exist";
+                response.Message = user == null ? "User does not exist" : "Please confirm your email before logging in";
                 return response;
             }
-
             if (user.Status == "isInactive")
             {
                 response.Message = "Account is locked. Please reset password to access your account.";
@@ -97,7 +99,6 @@ namespace MyBankApp.Persistence.Services
 
             return response;
         }
-
         public async Task<UserResponseDetails> Register(UserRequestDto entity)
         {
             try
@@ -108,11 +109,9 @@ namespace MyBankApp.Persistence.Services
                     throw new ValidationException(validationResult.Errors);
                 }
 
-                var user_exist = await _unitOfWork.user.GetByColumnAsync(x => x.Email == entity.Email);
-
-                if (user_exist != null)
+                var userExist = await _unitOfWork.user.GetByColumnAsync(x => x.Email == entity.Email);
+                if (userExist != null)
                 {
-                    _logger.LogError("User already exists");
                     return new UserResponseDetails()
                     {
                         Message = $"User with the email {entity.Email} already exists. Please login",
@@ -120,7 +119,7 @@ namespace MyBankApp.Persistence.Services
                     };
                 }
 
-                var user = new User()
+                var user = new User
                 {
                     Email = entity.Email,
                     FirstName = entity.FirstName,
@@ -145,57 +144,25 @@ namespace MyBankApp.Persistence.Services
                     Status = "isActive"
                 };
 
+                var emailObject = new EmailConfirmationRequestDto
+                {
+                    UserEmail = user.Email,
+                    Token = _tokenGenerator.GenerateToken(user.UserName),
+                    FirstName = user.FirstName
+                };
+
                 await _unitOfWork.user.CreateAsync(user);
+                await SendConfirmationEmail(emailObject);
                 await _unitOfWork.CompleteAsync();
 
-                var notificationRequest = new
+                return new UserResponseDetails()
                 {
-                    To = entity.Email,
-                    Subject = "Account Registration",
-                    Body = $"Account Number{user.AccountNo}, Password : {entity.Password}"
+                    IsSuccess = true,
+                    Message = "Registration successful. Please confirm your email to login."
                 };
-                var httpClient = new HttpClient();
-                var sendEmail = await httpClient.PostAsJsonAsync("https://localhost:7168/api/EmailService", notificationRequest);
-
-                if (user.Status == "isActive")
-                {
-                    var token = _tokenGenerator.GenerateToken(entity.UserName);
-                    var response = new UserResponseDto()
-                    {
-                        LastLogin = "Now",
-                        Token = token,
-                        DailyLimitBalance = "",
-                        AccountNumber = user.AccountNo,
-                        UserName = user.UserName,
-                        AccountName = user.FirstName + " " + user.MiddleName + " " + user.LastName,
-                        Title = user.Title,
-                        GenderId = user.GenderId,
-                        AccountType = user.accountType,
-                        Bvn = user.Bvn,
-                        NIN = user.NIN,
-                        Status = user.Status,
-                        Email = user.Email,
-                    };
-
-                    return new UserResponseDetails()
-                    {
-
-                        IsSuccess = true,
-                        ResponseDetails = response,
-                    };
-                }
-                else
-                {
-                    return new UserResponseDetails()
-                    {
-                        Message = "User is not active",
-                        IsSuccess = false
-                    };
-                }
             }
             catch (ValidationException ex)
             {
-                _logger.LogError(ex, "Validation error");
                 return new UserResponseDetails()
                 {
                     Message = ex.Message,
@@ -204,7 +171,6 @@ namespace MyBankApp.Persistence.Services
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error registering user");
                 return new UserResponseDetails()
                 {
                     Message = "Server error",
@@ -212,8 +178,6 @@ namespace MyBankApp.Persistence.Services
                 };
             }
         }
-
-
         public async Task<UserResponseDetails> ChangePassword(ChangePassWordRequestDto entity)
         {
             try
@@ -296,6 +260,57 @@ namespace MyBankApp.Persistence.Services
 
             return response;
         }
+
+        public async Task SendConfirmationEmail(EmailConfirmationRequestDto request)
+        {
+            var httpclient = _httpClientFactory.CreateClient();
+            var emailModel = new
+            {
+                To = request.UserEmail,
+                Subject = "Account Registration",
+                Body = $"Hello {request.FirstName}, here is ur verification token: {request.Token}"
+
+            };
+            var sendEmail = await httpclient.PostAsJsonAsync("https://localhost:7168/api/EmailService", emailModel);
+
+
+        }
+        public async Task<string> EmailConfirmation(EmailConfirmationRequestDto request)
+        {
+            var user = await _unitOfWork.user.GetByColumnAsync(x => x.Email == request.UserEmail);
+
+            if (await ConfirmToken(request.Token, request.UserEmail))
+            {
+                user.EmailConfirmed = true;
+                await _unitOfWork.user.UpdateAsync(user);
+                await _unitOfWork.CompleteAsync();
+                return "Your Email has beem confirmed";
+            }
+            return "Email Confirmation Failed";
+        }
+
+        public async Task<bool> ConfirmToken(string token, string email)
+        {
+            var verificationToken = new VerificationToken
+            {
+                Email = email,
+                Token = token,
+                ActionType = ActionType.EmailConfirmation.ToString(),
+
+            };
+            await _unitOfWork.VerificationTokens.CreateAsync(verificationToken);
+            await _unitOfWork.CompleteAsync();
+            var userWithToken = await _unitOfWork.VerificationTokens.GetByColumnAsync(x => x.Email == email && x.Token == token);
+
+            if (userWithToken.Email == email && userWithToken.Token == token)
+            {
+                return true;
+            }
+            return false;
+        }
     }
+
+
 }
+
 

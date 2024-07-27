@@ -10,8 +10,8 @@ using MyBankApp.Persistence.Data;
 namespace MyBankApp.Persistence.Migrations
 {
     [DbContext(typeof(MyBankAppDbContext))]
-    [Migration("20240720082008_initia-commit")]
-    partial class initiacommit
+    [Migration("20240727133938_initial-commit")]
+    partial class initialcommit
     {
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
@@ -54,7 +54,7 @@ namespace MyBankApp.Persistence.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("gender");
+                    b.ToTable("Gender");
                 });
 
             modelBuilder.Entity("MyBankApp.Domain.Entities.LGA", b =>
@@ -120,8 +120,8 @@ namespace MyBankApp.Persistence.Migrations
                     b.Property<string>("Email")
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<string>("EmailConfirmed")
-                        .HasColumnType("nvarchar(max)");
+                    b.Property<bool>("EmailConfirmed")
+                        .HasColumnType("bit");
 
                     b.Property<string>("FirstName")
                         .HasColumnType("nvarchar(max)");
@@ -134,6 +134,9 @@ namespace MyBankApp.Persistence.Migrations
 
                     b.Property<string>("HashPassword")
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("IsLocked")
+                        .HasColumnType("bit");
 
                     b.Property<int>("LGAId")
                         .HasColumnType("int");
@@ -150,6 +153,9 @@ namespace MyBankApp.Persistence.Migrations
                     b.Property<string>("LastName")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<int>("LoginAttempts")
+                        .HasColumnType("int");
+
                     b.Property<string>("MiddleName")
                         .HasColumnType("nvarchar(max)");
 
@@ -157,9 +163,6 @@ namespace MyBankApp.Persistence.Migrations
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("PhoneNumber")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("PhoneNumberConfirmed")
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<int>("StateId")
@@ -182,6 +185,30 @@ namespace MyBankApp.Persistence.Migrations
                     b.HasIndex("GenderId");
 
                     b.ToTable("Users");
+                });
+
+            modelBuilder.Entity("MyBankApp.Domain.Entities.VerificationToken", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .UseIdentityColumn();
+
+                    b.Property<string>("ActionType")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("DateCreated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Email")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Token")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("VerificationTokens");
                 });
 
             modelBuilder.Entity("MyBankApp.Domain.Entities.LGA", b =>

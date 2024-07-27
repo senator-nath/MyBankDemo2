@@ -3,7 +3,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace MyBankApp.Persistence.Migrations
 {
-    public partial class initiacommit : Migration
+    public partial class initialcommit : Migration
     {
         protected override void Up(MigrationBuilder migrationBuilder)
         {
@@ -23,7 +23,7 @@ namespace MyBankApp.Persistence.Migrations
                 });
 
             migrationBuilder.CreateTable(
-                name: "gender",
+                name: "Gender",
                 columns: table => new
                 {
                     Id = table.Column<int>(type: "int", nullable: false)
@@ -32,7 +32,7 @@ namespace MyBankApp.Persistence.Migrations
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_gender", x => x.Id);
+                    table.PrimaryKey("PK_Gender", x => x.Id);
                 });
 
             migrationBuilder.CreateTable(
@@ -46,6 +46,22 @@ namespace MyBankApp.Persistence.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_State", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "VerificationTokens",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    Email = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    Token = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    ActionType = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    DateCreated = table.Column<DateTime>(type: "datetime2", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_VerificationTokens", x => x.Id);
                 });
 
             migrationBuilder.CreateTable(
@@ -63,9 +79,8 @@ namespace MyBankApp.Persistence.Migrations
                     AccountNo = table.Column<string>(type: "nvarchar(max)", nullable: true),
                     accountType = table.Column<string>(type: "nvarchar(max)", nullable: true),
                     PhoneNumber = table.Column<string>(type: "nvarchar(max)", nullable: true),
-                    EmailConfirmed = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    EmailConfirmed = table.Column<bool>(type: "bit", nullable: false),
                     Age = table.Column<string>(type: "nvarchar(max)", nullable: true),
-                    PhoneNumberConfirmed = table.Column<string>(type: "nvarchar(max)", nullable: true),
                     Dob = table.Column<DateTime>(type: "datetime2", nullable: false),
                     LGAId = table.Column<int>(type: "int", nullable: false),
                     StateId = table.Column<int>(type: "int", nullable: false),
@@ -78,6 +93,8 @@ namespace MyBankApp.Persistence.Migrations
                     DateCreated = table.Column<DateTime>(type: "datetime2", nullable: false),
                     LastModified = table.Column<DateTime>(type: "datetime2", nullable: false),
                     LastLogin = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    LoginAttempts = table.Column<int>(type: "int", nullable: false),
+                    IsLocked = table.Column<bool>(type: "bit", nullable: false),
                     Status = table.Column<string>(type: "nvarchar(max)", nullable: true),
                     GenderId = table.Column<int>(type: "int", nullable: false)
                 },
@@ -85,9 +102,9 @@ namespace MyBankApp.Persistence.Migrations
                 {
                     table.PrimaryKey("PK_Users", x => x.Id);
                     table.ForeignKey(
-                        name: "FK_Users_gender_GenderId",
+                        name: "FK_Users_Gender_GenderId",
                         column: x => x.GenderId,
-                        principalTable: "gender",
+                        principalTable: "Gender",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
                 });
@@ -135,10 +152,13 @@ namespace MyBankApp.Persistence.Migrations
                 name: "Users");
 
             migrationBuilder.DropTable(
+                name: "VerificationTokens");
+
+            migrationBuilder.DropTable(
                 name: "State");
 
             migrationBuilder.DropTable(
-                name: "gender");
+                name: "Gender");
         }
     }
 }

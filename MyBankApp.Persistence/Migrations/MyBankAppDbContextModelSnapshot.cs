@@ -52,7 +52,7 @@ namespace MyBankApp.Persistence.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("gender");
+                    b.ToTable("Gender");
                 });
 
             modelBuilder.Entity("MyBankApp.Domain.Entities.LGA", b =>
@@ -118,8 +118,8 @@ namespace MyBankApp.Persistence.Migrations
                     b.Property<string>("Email")
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<string>("EmailConfirmed")
-                        .HasColumnType("nvarchar(max)");
+                    b.Property<bool>("EmailConfirmed")
+                        .HasColumnType("bit");
 
                     b.Property<string>("FirstName")
                         .HasColumnType("nvarchar(max)");
@@ -183,6 +183,30 @@ namespace MyBankApp.Persistence.Migrations
                     b.HasIndex("GenderId");
 
                     b.ToTable("Users");
+                });
+
+            modelBuilder.Entity("MyBankApp.Domain.Entities.VerificationToken", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .UseIdentityColumn();
+
+                    b.Property<string>("ActionType")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("DateCreated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Email")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Token")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("VerificationTokens");
                 });
 
             modelBuilder.Entity("MyBankApp.Domain.Entities.LGA", b =>

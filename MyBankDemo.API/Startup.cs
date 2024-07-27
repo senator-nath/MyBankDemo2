@@ -62,6 +62,7 @@ namespace MyBankDemo.API
             services.AddScoped<RandomNumberGenerator>();
             services.AddScoped<AgeCalculator>();
             services.AddScoped<TokenGenerator>();
+            services.AddScoped<IVerificationTokenRepository, VerificationTokenRepository>();
 
 
             services.AddHttpClient();

@@ -18,7 +18,7 @@ namespace MyBankApp.Domain.Entities
         public string AccountNo { get; set; }
         public string accountType { get; set; }
         public string PhoneNumber { get; set; }
-        public string EmailConfirmed { get; set; }
+        public bool EmailConfirmed { get; set; }
         public string Age { get; set; }
 
         public DateTime Dob { get; set; }
@@ -34,6 +34,7 @@ namespace MyBankApp.Domain.Entities
         public DateTime LastModified { get; set; }
         public DateTime LastLogin { get; set; }
         public int LoginAttempts { get; set; }
+
         public bool IsLocked { get; set; }
         public string Status { get; set; }
         public int GenderId { get; set; }

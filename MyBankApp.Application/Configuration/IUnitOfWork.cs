@@ -14,7 +14,7 @@ namespace MyBankApp.Application.Configuration
         ILGARepository lgaRepository { get; }
         IAccountLimitRepository accountLimit { get; }
         IGenderRepository gender { get; }
-
+        IVerificationTokenRepository VerificationTokens { get; }
 
 
         Task<int> CompleteAsync();

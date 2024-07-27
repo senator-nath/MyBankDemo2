@@ -20,7 +20,8 @@ namespace MyBankApp.Persistence.Data
         public DbSet<LGA> Lga { get; set; }
         public DbSet<State> State { get; set; }
         public DbSet<AccountLimit> AccountLimits { get; set; }
+        public DbSet<VerificationToken> VerificationTokens { get; set; }
 
-        public DbSet<Gender> gender { get; set; }
+
     }
 }
