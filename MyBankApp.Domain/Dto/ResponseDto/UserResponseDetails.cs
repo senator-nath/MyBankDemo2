@@ -14,6 +14,6 @@ namespace MyBankApp.Domain.Dto.ResponseDto
         public UserResponseDto ResponseDetails { get; set; }
         public bool IsSuccess { get; set; }
         public string Token { get; set; }
-
+        public string ResetPasswordToken { get; set; }
     }
 }

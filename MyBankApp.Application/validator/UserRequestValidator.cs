@@ -41,7 +41,7 @@ namespace MyBankApp.Application.validator
             //    .Equal(x => x.Password).WithMessage("Passwords must match.");
 
             //RuleFor(x => x.PhoneNumber)
-            //    .Matches(@"^\+?[1-9]\d{11}$").WithMessage("Invalid phone number format.");
+            //    .Matches(@"^\d{11}$").WithMessage("Invalid phone number format.");
 
             //RuleFor(x => x.Age)
             //    .GreaterThan(0).WithMessage("Age must be a positive integer.");

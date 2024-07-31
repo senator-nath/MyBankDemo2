@@ -19,6 +19,6 @@ namespace MyBankApp.Application.Contracts.IServices
 
         Task<string> EmailConfirmation(EmailConfirmationRequestDto request);
         Task<UserResponseDetails> ResetPasswordRequest(ResetPasswordRequestDto entity);
-        Task<UserResponseDetails> ResetPasswordWithToken(ResetPasswordRequestTokenDto entity);
+        Task<string> ResetPasswordWithToken(ResetPasswordRequestTokenDto entity);
     }
 }

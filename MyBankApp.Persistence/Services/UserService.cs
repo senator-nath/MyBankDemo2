@@ -33,24 +33,29 @@ namespace MyBankApp.Persistence.Services
         private readonly AppSettings _appSettings;
         private readonly IConfiguration _configuration;
         private readonly UserRequestValidator _validator;
-        private readonly IHttpClientFactory _httpClientFactory;
+
         private readonly RandomNumberGenerator _randomNumberGenerator;
         private readonly AgeCalculator _ageCalculator;
         private readonly TokenGenerator _tokenGenerator;
-        private readonly UserManager<User> _userManager;
+        private readonly TokenConfirmation _tokenConfirmation;
 
-        public UserService(IUnitOfWork unitOfWork, ILogger<UserService> logger, IConfiguration configuration, UserRequestValidator validator, IOptions<AppSettings> appSettings, IHttpClientFactory httpClientFactory, RandomNumberGenerator randomNumberGenerator, AgeCalculator ageCalculator, TokenGenerator tokenGenerator)
+        private readonly ConfirmationMail _confirmMail;
+
+        public UserService(IUnitOfWork unitOfWork, ILogger<UserService> logger, IConfiguration configuration, UserRequestValidator validator, IOptions<AppSettings> appSettings, IHttpClientFactory httpClientFactory, RandomNumberGenerator randomNumberGenerator, AgeCalculator ageCalculator, TokenGenerator tokenGenerator, TokenConfirmation tokenConfirmation, ConfirmationMail confirmMail)
         {
             _unitOfWork = unitOfWork;
             _logger = logger;
             _configuration = configuration;
             _validator = validator;
             _appSettings = appSettings.Value;
-            _httpClientFactory = httpClientFactory;
             _ageCalculator = ageCalculator;
             _tokenGenerator = tokenGenerator;
             _randomNumberGenerator = randomNumberGenerator;
+            _tokenConfirmation = tokenConfirmation;
+            _confirmMail = confirmMail;
         }
+
+
         public async Task<UserResponseDetails> Login(LoginRequestDto entity)
         {
             var response = new UserResponseDetails();
@@ -61,6 +66,7 @@ namespace MyBankApp.Persistence.Services
                 response.Message = user == null ? "User does not exist" : "Please confirm your email before logging in";
                 return response;
             }
+
             if (user.Status == "isInactive")
             {
                 response.Message = "Account is locked. Please reset password to access your account.";
@@ -91,14 +97,12 @@ namespace MyBankApp.Persistence.Services
             user.Status = "isActive";
             await _unitOfWork.user.UpdateAsync(user);
 
-            var token = _tokenGenerator.GenerateToken(user.UserName);
-
-            response.Token = token;
             response.Message = "Login successful";
             response.IsSuccess = true;
 
             return response;
         }
+
         public async Task<UserResponseDetails> Register(UserRequestDto entity)
         {
             try
@@ -147,12 +151,12 @@ namespace MyBankApp.Persistence.Services
                 var emailObject = new EmailConfirmationRequestDto
                 {
                     UserEmail = user.Email,
-                    Token = _tokenGenerator.GenerateToken(user.UserName),
+                    Token = await _tokenGenerator.GenerateToken(user.Email, "EmailConfirmation"),
                     FirstName = user.FirstName
                 };
 
                 await _unitOfWork.user.CreateAsync(user);
-                await SendConfirmationEmail(emailObject);
+                await _confirmMail.SendConfirmationEmail(emailObject);
                 await _unitOfWork.CompleteAsync();
 
                 return new UserResponseDetails()
@@ -233,53 +237,11 @@ namespace MyBankApp.Persistence.Services
         }
 
 
-        //public async Task<UserResponseDetails> ResetPassword(ResetPasswordRequestDto entity)
-        //{
-        //    var response = new UserResponseDetails();
-        //    var user = await _unitOfWork.user.GetByColumnAsync(x => x.Email == entity.Email);
-
-        //    if (user == null)
-        //    {
-        //        response.Message = "User does not exist";
-        //        return response;
-        //    }
-
-        //    if (user.Status != "isInactive")
-        //    {
-        //        response.Message = "Account is already active. No need to reset password.";
-        //        return response;
-        //    }
-
-        //    user.HashPassword = Helper.Helper.HashPassword(entity.Password);
-        //    user.Status = "isActive";
-        //    user.LoginAttempts = 0;
-        //    await _unitOfWork.user.UpdateAsync(user);
-
-        //    response.Message = "Password reset successful. You can now login.";
-        //    response.IsSuccess = true;
-
-        //    return response;
-        //}
-
-        public async Task SendConfirmationEmail(EmailConfirmationRequestDto request)
-        {
-            var httpclient = _httpClientFactory.CreateClient();
-            var emailModel = new
-            {
-                To = request.UserEmail,
-                Subject = "Account Registration",
-                Body = $"Hello {request.FirstName}, here is ur verification token: {request.Token}"
-
-            };
-            var sendEmail = await httpclient.PostAsJsonAsync("https://localhost:7168/api/EmailService", emailModel);
-
-
-        }
         public async Task<string> EmailConfirmation(EmailConfirmationRequestDto request)
         {
             var user = await _unitOfWork.user.GetByColumnAsync(x => x.Email == request.UserEmail);
 
-            if (await ConfirmToken(request.Token, request.UserEmail))
+            if (await _tokenConfirmation.ConfirmToken(request.Token, request.UserEmail))
             {
                 user.EmailConfirmed = true;
                 await _unitOfWork.user.UpdateAsync(user);
@@ -289,25 +251,7 @@ namespace MyBankApp.Persistence.Services
             return "Email Confirmation Failed";
         }
 
-        public async Task<bool> ConfirmToken(string token, string email)
-        {
-            var verificationToken = new VerificationToken
-            {
-                Email = email,
-                Token = token,
-                ActionType = ActionType.EmailConfirmation.ToString(),
 
-            };
-            await _unitOfWork.VerificationTokens.CreateAsync(verificationToken);
-            await _unitOfWork.CompleteAsync();
-            var userWithToken = await _unitOfWork.VerificationTokens.GetByColumnAsync(x => x.Email == email && x.Token == token);
-
-            if (userWithToken.Email == email && userWithToken.Token == token)
-            {
-                return true;
-            }
-            return false;
-        }
 
         public async Task<UserResponseDetails> ResetPasswordRequest(ResetPasswordRequestDto entity)
         {
@@ -320,7 +264,7 @@ namespace MyBankApp.Persistence.Services
                 return response;
             }
 
-            var token = _tokenGenerator.GenerateToken(user.UserName);
+            var token = await _tokenGenerator.GenerateToken(user.Email, "EmailConfirmation");
             var emailObject = new EmailConfirmationRequestDto
             {
                 UserEmail = user.Email,
@@ -328,81 +272,48 @@ namespace MyBankApp.Persistence.Services
                 FirstName = user.FirstName
             };
 
-            await SendResetPasswordEmail(emailObject);
+            await _confirmMail.SendResetPasswordEmail(emailObject);
             response.Message = "Reset password token sent to your email. Please check your email to complete the reset process.";
             response.IsSuccess = true;
 
             return response;
         }
 
-        public async Task SendResetPasswordEmail(EmailConfirmationRequestDto request)
+
+        public async Task<string> ResetPasswordWithToken(ResetPasswordRequestTokenDto request)
         {
-            var httpclient = _httpClientFactory.CreateClient();
-            var emailModel = new
-            {
-                To = request.UserEmail,
-                Subject = "Reset Password",
-                Body = $"Hello {request.FirstName}, here is your reset password token: {request.Token}"
-            };
-            var sendEmail = await httpclient.PostAsJsonAsync("https://localhost:7168/api/EmailService", emailModel);
-        }
-        public async Task<UserResponseDetails> ResetPasswordWithToken(ResetPasswordRequestTokenDto entity)
-        {
-            var response = new UserResponseDetails();
-            var user = await _unitOfWork.user.GetByColumnAsync(x => x.Email == entity.Email);
+            var user = await _unitOfWork.user.GetByColumnAsync(x => x.Email == request.Email);
 
             if (user == null)
             {
-                response.Message = "User does not exist";
-                return response;
+                return "User not found";
             }
 
-            // Check if the token is null or empty
-            if (string.IsNullOrEmpty(entity.Token))
+            if (user.Status != "isInactive")
             {
-                response.Message = "Reset password token is required";
-                return response;
+                return "Account is not locked";
             }
 
+            var verificationToken = await _unitOfWork.VerificationTokens.GetByColumnAsync(x => x.Email == request.Email && x.ActionType == ActionType.ResetPassword.ToString());
 
-            if (await ConfirmTokenForPassword(entity.Token))
+            if (!await _tokenConfirmation.ConfirmToken(request.Token, request.Email))
             {
-                user.EmailConfirmed = true;
-                await _unitOfWork.user.UpdateAsync(user);
-                await _unitOfWork.CompleteAsync();
-                response.Message = "Your Password has been confirmed";
-                return response;
+                return "Invalid or expired token";
             }
-            user.HashPassword = Helper.Helper.HashPassword(entity.NewPassword);
+
+            user.HashPassword = Helper.Helper.HashPassword(request.NewPassword);
             user.Status = "isActive";
             user.LoginAttempts = 0;
             await _unitOfWork.user.UpdateAsync(user);
-            response.Message = "Password Confirmation Failed Due To Invalid token";
-            return response;
-
-        }
-        public async Task<bool> ConfirmTokenForPassword(string token)
-        {
-            var verificationToken = new VerificationToken
-            {
-
-                Token = token,
-                ActionType = ActionType.EmailConfirmation.ToString(),
-
-            };
-            await _unitOfWork.VerificationTokens.CreateAsync(verificationToken);
             await _unitOfWork.CompleteAsync();
-            var userWithToken = await _unitOfWork.VerificationTokens.GetByColumnAsync(x => x.Token == token);
 
-            if (userWithToken.Token == token)
-            {
-                return true;
-            }
-            return false;
+            return "Password reset successful";
         }
+
 
 
     }
 }
+
 
 

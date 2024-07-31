@@ -9,6 +9,7 @@ namespace MyBankApp.Domain.Dto.RequestDto
     public class ResetPasswordRequestDto
     {
         public string Email { get; set; }
+        
 
     }
 }

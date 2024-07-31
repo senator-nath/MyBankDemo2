@@ -7,38 +7,38 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Security.Claims;
 using Microsoft.Extensions.Options;
+using MyBankApp.Domain.Entities;
+using MyBankApp.Domain.Enum;
+using MyBankApp.Application.Configuration;
 
 namespace MyBankApp.Persistence.Helper
 {
 
     public class TokenGenerator
     {
-        private readonly AppSettings _appSettings;
-
-        public TokenGenerator(IOptions<AppSettings> appSettings)
+        private readonly IUnitOfWork _unitOfWork;
+        public TokenGenerator(IUnitOfWork unitOfWork)
         {
-            _appSettings = appSettings.Value;
+            _unitOfWork = unitOfWork;
         }
 
-        public string GenerateToken(string userName)
+        public async Task<string> GenerateToken(string email, string actionType)
         {
-            var claim = new List<Claim>
-        {
-            new Claim(JwtRegisteredClaimNames.Sub, userName),
-            new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
-        };
+            var token = new Random().Next(10000, 99999);
+            var expiresAt = DateTime.UtcNow.AddMinutes(2);
 
-            var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_appSettings.secret));
-            var cred = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
-            var tokenHandler = new JwtSecurityTokenHandler();
-            var exp = DateTime.UtcNow.AddDays(7);
-            var tok = new JwtSecurityToken
-                (
-                    //issuer: "LocalHost",
-                    expires: exp,
-                    signingCredentials: cred
-                );
-            return tokenHandler.WriteToken(tok);
+            var verificationToken = new VerificationToken
+            {
+                Email = email,
+                Token = token.ToString(),
+                ActionType = actionType,
+                DateCreated = DateTime.UtcNow
+            };
+
+            await _unitOfWork.VerificationTokens.CreateAsync(verificationToken);
+            await _unitOfWork.CompleteAsync();
+
+            return token.ToString();
         }
     }
 }

@@ -24,12 +24,12 @@ namespace MyBankDemo.API.Controllers
             _userService = userService;
         }
         [HttpPost("register")]
-        public async Task<ActionResult<User>> RegisterUser([FromBody] UserRequestDto user)
+        public async Task<ActionResult<UserResponseDetails>> RegisterUser([FromBody] UserRequestDto user)
         {
             try
             {
                 var result = await _userService.Register(user);
-                return Ok(result);
+                return result;
             }
             catch (InvalidOperationException ex)
             {
@@ -64,13 +64,13 @@ namespace MyBankDemo.API.Controllers
         public async Task<ActionResult<UserResponseDetails>> ResetPasswordRequest(ResetPasswordRequestDto entity)
         {
             var response = await _userService.ResetPasswordRequest(entity);
-            return Ok(response);
+            return response;
         }
         [HttpPost("with-token")]
-        public async Task<ActionResult<UserResponseDetails>> ResetPasswordWithToken(ResetPasswordRequestTokenDto entity)
+        public async Task<ActionResult<string>> ResetPasswordWithToken(ResetPasswordRequestTokenDto entity)
         {
             var response = await _userService.ResetPasswordWithToken(entity);
-            return Ok(response);
+            return response;
         }
     }
 }
