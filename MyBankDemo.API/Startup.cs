@@ -30,6 +30,8 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using MyBankApp.Application.validator;
 using MyBankApp.Persistence.Helper;
+using Microsoft.Extensions.Options;
+using Swashbuckle.AspNetCore.SwaggerGen;
 namespace MyBankDemo.API
 {
     public class Startup
@@ -66,7 +68,8 @@ namespace MyBankDemo.API
             services.AddScoped<TokenConfirmation>();
             services.AddScoped<TokenGenerator>();
             services.AddScoped<IVerificationTokenRepository, VerificationTokenRepository>();
-
+            services.AddScoped<IJwtValidationService, JwtValidationService>();
+            services.AddScoped<JwtTokenGeneratorAndValidation>();
 
             services.AddHttpClient();
             services.AddControllers();
@@ -98,22 +101,50 @@ namespace MyBankDemo.API
                 options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
                 options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
             })
-            .AddJwtBearer(options =>
+     .AddJwtBearer(options =>
+     {
+         options.RequireHttpsMetadata = false;
+         options.SaveToken = true;
+         options.TokenValidationParameters = new TokenValidationParameters
+         {
+             ValidateIssuerSigningKey = true,
+             IssuerSigningKey = new SymmetricSecurityKey(Encoding.ASCII.GetBytes(appSettings.secret)),
+             ValidateIssuer = false,
+             ValidateAudience = false,
+         };
+     });
+
+            // Configure Swagger
+            services.AddSwaggerGen(options =>
             {
-                options.RequireHttpsMetadata = false;
-                options.SaveToken = true;
-                options.TokenValidationParameters = new TokenValidationParameters
+                options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
                 {
-                    ValidateIssuerSigningKey = true,
-                    IssuerSigningKey = new SymmetricSecurityKey(Encoding.ASCII.GetBytes(appSettings.secret)),
-                    ValidateIssuer = false,
-                    ValidateAudience = false,
+                    Description = "JWT Authorization header using the bearer scheme. \r\n\r\n Enter 'Bearer' [space] and then your token in the text below.",
+                    Name = "Authorization",
+                    In = ParameterLocation.Header,
+                    Type = SecuritySchemeType.ApiKey,
+                    Scheme = "Bearer"
+                });
 
-
-                };
+                options.AddSecurityRequirement(new OpenApiSecurityRequirement
+        {
+            {
+                new OpenApiSecurityScheme
+                {
+                    Reference = new OpenApiReference
+                    {
+                        Type = ReferenceType.SecurityScheme,
+                        Id = "Bearer"
+                    },
+                    Scheme = "Bearer",
+                    Name = "Bearer",
+                    In = ParameterLocation.Header,
+                },
+                new List<string>()
+            }
+        });
             });
         }
-
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
         public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
         {

@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Http;
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using MyBankApp.Application.Configuration;
 using MyBankApp.Application.Contracts.IServices;
@@ -13,6 +14,7 @@ using System.Threading.Tasks;
 
 namespace MyBankDemo.API.Controllers
 {
+
     [Route("api/[controller]")]
     [ApiController]
     public class UserController : ControllerBase
@@ -46,6 +48,7 @@ namespace MyBankDemo.API.Controllers
         {
             return await _userService.Login(entity);
         }
+        [Authorize]
         [HttpPost("change-password")]
         public async Task<IActionResult> ChangePassword(ChangePassWordRequestDto entity)
         {

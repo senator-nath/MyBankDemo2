@@ -38,10 +38,10 @@ namespace MyBankApp.Persistence.Services
         private readonly AgeCalculator _ageCalculator;
         private readonly TokenGenerator _tokenGenerator;
         private readonly TokenConfirmation _tokenConfirmation;
-
+        private readonly JwtTokenGeneratorAndValidation _JwttokenGenerator;
         private readonly ConfirmationMail _confirmMail;
 
-        public UserService(IUnitOfWork unitOfWork, ILogger<UserService> logger, IConfiguration configuration, UserRequestValidator validator, IOptions<AppSettings> appSettings, IHttpClientFactory httpClientFactory, RandomNumberGenerator randomNumberGenerator, AgeCalculator ageCalculator, TokenGenerator tokenGenerator, TokenConfirmation tokenConfirmation, ConfirmationMail confirmMail)
+        public UserService(IUnitOfWork unitOfWork, ILogger<UserService> logger, IConfiguration configuration, UserRequestValidator validator, IOptions<AppSettings> appSettings, IHttpClientFactory httpClientFactory, RandomNumberGenerator randomNumberGenerator, AgeCalculator ageCalculator, TokenGenerator tokenGenerator, TokenConfirmation tokenConfirmation, ConfirmationMail confirmMail, JwtTokenGeneratorAndValidation jwttokenGenerator)
         {
             _unitOfWork = unitOfWork;
             _logger = logger;
@@ -53,6 +53,7 @@ namespace MyBankApp.Persistence.Services
             _randomNumberGenerator = randomNumberGenerator;
             _tokenConfirmation = tokenConfirmation;
             _confirmMail = confirmMail;
+            _JwttokenGenerator = jwttokenGenerator;
         }
 
 
@@ -96,10 +97,11 @@ namespace MyBankApp.Persistence.Services
             user.LoginAttempts = 0;
             user.Status = "isActive";
             await _unitOfWork.user.UpdateAsync(user);
-
+            var token = _JwttokenGenerator.GenerateToken(user.Email);
             response.Message = "Login successful";
-            response.IsSuccess = true;
 
+            response.IsSuccess = true;
+            response.Token = token;
             return response;
         }
 

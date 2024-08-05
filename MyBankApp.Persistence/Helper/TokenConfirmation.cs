@@ -19,13 +19,20 @@ namespace MyBankApp.Persistence.Helper
         {
             var verificationToken = await _unitOfWork.VerificationTokens.GetByColumnAsync(x => x.Email == email && x.Token == token && x.ActionType == ActionType.EmailConfirmation.ToString());
 
-            if (verificationToken != null && verificationToken.DateCreated.AddMinutes(10) > DateTime.UtcNow)
+            if (verificationToken != null)
             {
                 await _unitOfWork.VerificationTokens.DeleteAsync(verificationToken);
                 await _unitOfWork.CompleteAsync();
                 return true;
             }
+            var expirationDuration = TimeSpan.FromMinutes(3);
 
+            // Calculate the time elapsed since the token was created
+            var timeElapsed = DateTime.Now - verificationToken.DateCreated;
+            if (verificationToken.Email == email && verificationToken.Token == token && timeElapsed < expirationDuration)
+            {
+                return true;
+            }
             return false;
         }
     }
